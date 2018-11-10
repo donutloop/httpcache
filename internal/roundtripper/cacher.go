@@ -1,10 +1,13 @@
 package roundtripper
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
 	"net/http"
+	"net/http/httputil"
 )
 
 type CacheTransport struct {
@@ -13,7 +16,10 @@ type CacheTransport struct {
 }
 
 func (t *CacheTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	clonedRequest := cloneRequest(req)
+	clonedRequest, err := makeHashFromRequest(req)
+	if err != nil {
+		return nil, err
+	}
 	cachedResponse, ok := t.Cache.Get(clonedRequest)
 	if !ok {
 		proxyResponse, err := t.Transport.RoundTrip(req)
@@ -29,7 +35,7 @@ func (t *CacheTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // CloneRequest returns a clone of the provided *http.Request. The clone is a
 // shallow copy of the struct and its Header map.
-func cloneRequest(r *http.Request) *http.Request {
+func makeHashFromRequest(r *http.Request) (string, error) {
 	// shallow copy of the struct
 	r2 := new(http.Request)
 	*r2 = *r
@@ -38,5 +44,13 @@ func cloneRequest(r *http.Request) *http.Request {
 	for k, s := range r.Header {
 		r2.Header[k] = s
 	}
-	return r2
+
+	d, err := httputil.DumpRequest(r, true)
+	if err != nil {
+		return "", err
+	}
+
+	hasher := md5.New()
+	hasher.Write([]byte(d))
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
