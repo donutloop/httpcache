@@ -26,7 +26,7 @@ func main() {
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
 
-	proxy := xhttp.NewProxy(*cap)
+	proxy := xhttp.NewProxy(*cap, log.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 
