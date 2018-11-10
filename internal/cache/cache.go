@@ -17,7 +17,7 @@ type LRUCache struct {
 
 	// list & table of *entry objects
 	list  *list.List
-	table map[*http.Request]*list.Element
+	table map[string]*list.Element
 
 	// Our current size. Obviously a gross simplification and
 	// low-grade approximation.
@@ -37,11 +37,12 @@ func (cp *CachedResponse) Size() int {
 
 // Item is what is stored in the cache
 type Item struct {
+	Key   string
 	Value CachedResponse
 }
 
 type entry struct {
-	key          *http.Request
+	key          string
 	value        *CachedResponse
 	size         int64
 	timeAccessed time.Time
@@ -51,14 +52,14 @@ type entry struct {
 func NewLRUCache(capacity int64) *LRUCache {
 	return &LRUCache{
 		list:     list.New(),
-		table:    make(map[*http.Request]*list.Element),
+		table:    make(map[string]*list.Element),
 		capacity: capacity,
 	}
 }
 
 // Get returns a value from the cache, and marks the entry as most
 // recently used.
-func (lru *LRUCache) Get(key *http.Request) (v *CachedResponse, ok bool) {
+func (lru *LRUCache) Get(key string) (v *CachedResponse, ok bool) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -71,7 +72,7 @@ func (lru *LRUCache) Get(key *http.Request) (v *CachedResponse, ok bool) {
 }
 
 // Set sets a value in the cache.
-func (lru *LRUCache) Set(key *http.Request, value *CachedResponse) {
+func (lru *LRUCache) Set(key string, value *CachedResponse) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -84,7 +85,7 @@ func (lru *LRUCache) Set(key *http.Request, value *CachedResponse) {
 
 // SetIfAbsent will set the value in the cache if not present. If the
 // value exists in the cache, we don't set it.
-func (lru *LRUCache) SetIfAbsent(key *http.Request, value *CachedResponse) {
+func (lru *LRUCache) SetIfAbsent(key string, value *CachedResponse) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -96,7 +97,7 @@ func (lru *LRUCache) SetIfAbsent(key *http.Request, value *CachedResponse) {
 }
 
 // Delete removes an entry from the cache, and returns if the entry existed.
-func (lru *LRUCache) Delete(key *http.Request) bool {
+func (lru *LRUCache) Delete(key string) bool {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -157,7 +158,7 @@ func (lru *LRUCache) moveToFront(element *list.Element) {
 	element.Value.(*entry).timeAccessed = time.Now()
 }
 
-func (lru *LRUCache) addNew(key *http.Request, value *CachedResponse) {
+func (lru *LRUCache) addNew(key string, value *CachedResponse) {
 	newEntry := &entry{key, value, int64(value.Size()), time.Now()}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element

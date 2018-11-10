@@ -1,10 +1,9 @@
 package xhttp
 
 import (
-	"errors"
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
-	"github.com/donutloop/httpcache/internal/xhttputil"
+	"github.com/donutloop/httpcache/internal/roundtripper"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
@@ -12,21 +11,27 @@ import (
 
 func NewProxy(capacity int64, logger func(v ...interface{})) *Proxy {
 	return &Proxy{
-		cache:  cache.NewLRUCache(capacity),
-		client: &http.Client{Transport: &xhttputil.LoggedTransport{Transport: http.DefaultTransport, Logger:logger}},
+		client: &http.Client{
+			Transport: &roundtripper.LoggedTransport{
+				Transport: &roundtripper.CacheTransport{
+					Transport: http.DefaultTransport,
+					Cache:     cache.NewLRUCache(capacity),
+				},
+				Logger: logger,
+			}},
 		logger: logger,
 	}
 }
 
 type Proxy struct {
-	cache  *cache.LRUCache
 	client *http.Client
 	logger func(v ...interface{})
 }
 
 func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
-	proxyResponse, err := p.Do(req)
+	req.RequestURI = ""
+	proxyResponse, err := p.client.Do(req)
 	if err != nil {
 		p.logger(err.Error())
 		resp.WriteHeader(http.StatusInternalServerError)
@@ -54,22 +59,6 @@ func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	resp.Write(body)
 }
 
-func (p *Proxy) Do(req *http.Request) (*http.Response, error) {
-	clonedRequest := CloneRequest(req)
-	cachedResponse, ok := p.cache.Get(clonedRequest)
-	if !ok {
-		req.RequestURI = ""
-		proxyResponse, err := p.client.Do(req)
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("proxy couldn't forward request to destination server (%v)", err))
-		}
-		cachedResponse = &cache.CachedResponse{Resp: proxyResponse}
-		p.cache.Set(clonedRequest, cachedResponse)
-		return cachedResponse.Resp, nil
-	}
-	return cachedResponse.Resp, nil
-}
-
 type requestDump []byte
 
 type responseDump []byte
@@ -91,19 +80,4 @@ func Hsts(next http.Handler) http.Handler {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		next.ServeHTTP(w, r)
 	})
-}
-
-// CloneRequest returns a clone of the provided *http.Request. The clone is a
-// shallow copy of the struct and its Header map.
-func CloneRequest(r *http.Request) *http.Request {
-	// shallow copy of the struct
-	r2 := new(http.Request)
-	*r2 = *r
-	r2.RequestURI = ""
-	// deep copy of the Header
-	r2.Header = make(http.Header)
-	for k, s := range r.Header {
-		r2.Header[k] = s
-	}
-	return r2
 }
