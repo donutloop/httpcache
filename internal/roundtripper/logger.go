@@ -1,4 +1,4 @@
-package xhttputil
+package roundtripper
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 // A LoggedTransport prints URLs and timings for each HTTP request.
 type LoggedTransport struct {
-	Logger func(v ...interface{})
+	Logger    func(v ...interface{})
 	Transport http.RoundTripper // underlying transport (or default if nil)
 }
 
