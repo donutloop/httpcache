@@ -1,8 +1,9 @@
-package integration_tests
+package tests
 
 import (
 	"fmt"
 	"github.com/donutloop/httpcache/internal/xhttp"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,7 +18,7 @@ var client *http.Client
 
 func TestMain(m *testing.M) {
 
-	proxy := xhttp.NewProxy(100)
+	proxy := xhttp.NewProxy(100, log.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 	proxyServer := httptest.NewServer(proxy)

@@ -5,28 +5,29 @@ import (
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httputil"
 )
 
-func NewProxy(capacity int64) *Proxy {
+func NewProxy(capacity int64, errorLogger func(v ...interface{})) *Proxy {
 	return &Proxy{
 		cache:  cache.NewLRUCache(capacity),
 		client: &http.Client{},
+		ErrorLogger: errorLogger,
 	}
 }
 
 type Proxy struct {
 	cache  *cache.LRUCache
 	client *http.Client
+	ErrorLogger func(v ...interface{})
 }
 
 func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	proxyResponse, err := p.Do(req)
 	if err != nil {
-		log.Println(err.Error())
+		p.ErrorLogger(err.Error())
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -39,11 +40,11 @@ func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	body, err := ioutil.ReadAll(proxyResponse.Body)
 	if err != nil {
-		log.Println(fmt.Sprintf("proxy couldn't read body of response (%v)", err))
+		p.ErrorLogger(fmt.Sprintf("proxy couldn't read body of response (%v)", err))
 		requestDumped, responseDumped, err := dump(req, proxyResponse)
 		if err == nil {
-			log.Println(fmt.Sprintf("request: %#v", requestDumped))
-			log.Println(fmt.Sprintf("response: %#v", responseDumped))
+			p.ErrorLogger(fmt.Sprintf("request: %#v", requestDumped))
+			p.ErrorLogger(fmt.Sprintf("response: %#v", responseDumped))
 		}
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
