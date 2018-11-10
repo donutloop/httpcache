@@ -53,7 +53,8 @@ func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 }
 
 func (p *Proxy) Do(req *http.Request) (*http.Response, error) {
-	cachedResponse, ok := p.cache.Get(req.URL.String())
+	clonedRequest := CloneRequest(req)
+	cachedResponse, ok := p.cache.Get(clonedRequest)
 	if !ok {
 		req.RequestURI = ""
 		proxyResponse, err := p.client.Do(req)
@@ -61,7 +62,7 @@ func (p *Proxy) Do(req *http.Request) (*http.Response, error) {
 			return nil, errors.New(fmt.Sprintf("proxy couldn't forward request to destination server (%v)", err))
 		}
 		cachedResponse = &cache.CachedResponse{Resp: proxyResponse}
-		p.cache.Set(req.URL.String(), cachedResponse)
+		p.cache.Set(clonedRequest, cachedResponse)
 		return cachedResponse.Resp, nil
 	}
 	return cachedResponse.Resp, nil
@@ -88,4 +89,19 @@ func Hsts(next http.Handler) http.Handler {
 		w.Header().Add("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// CloneRequest returns a clone of the provided *http.Request. The clone is a
+// shallow copy of the struct and its Header map.
+func CloneRequest(r *http.Request) *http.Request {
+	// shallow copy of the struct
+	r2 := new(http.Request)
+	*r2 = *r
+	r2.RequestURI = ""
+	// deep copy of the Header
+	r2.Header = make(http.Header)
+	for k, s := range r.Header {
+		r2.Header[k] = s
+	}
+	return r2
 }

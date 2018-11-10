@@ -1,20 +1,19 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
 	"net/http"
 	"os"
-	"fmt"
 	"text/tabwriter"
 	"time"
-	"context"
 )
 
 func main() {
 	log.SetFlags(log.Ldate | log.Lshortfile | log.Ltime)
-
 
 	fs := flag.NewFlagSet("http-proxy", flag.ExitOnError)
 	var (
@@ -22,11 +21,10 @@ func main() {
 		tlsAddr  = fs.String("tls", "", "serve TLS on this address (optional)")
 		cert     = fs.String("cert", "server.crt", "TLS certificate")
 		key      = fs.String("key", "server.key", "TLS key")
-		cap      = fs.Int64( "cap", 100, "capacity of cache")
+		cap      = fs.Int64("cap", 100, "capacity of cache")
 	)
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
-
 
 	proxy := xhttp.NewProxy(*cap)
 	mux := http.NewServeMux()
@@ -46,12 +44,12 @@ func main() {
 
 	if *tlsAddr != "" {
 		server := &http.Server{Addr: *tlsAddr, Handler: xhttp.Hsts(proxy)}
-			log.Printf("serving TLS on %s", *tlsAddr)
-			if err := server.ListenAndServeTLS(*cert, *key); err != nil {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-				defer cancel()
-				server.Shutdown(ctx)
-			}
+		log.Printf("serving TLS on %s", *tlsAddr)
+		if err := server.ListenAndServeTLS(*cert, *key); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			server.Shutdown(ctx)
+		}
 	} else {
 		log.Printf("not serving TLS")
 	}
@@ -74,4 +72,3 @@ func usageFor(fs *flag.FlagSet, short string) func() {
 		tw.Flush()
 	}
 }
-
