@@ -9,13 +9,13 @@ import (
 	"net/http/httputil"
 )
 
-func NewProxy(capacity int64, logger func(v ...interface{})) *Proxy {
+func NewProxy(cache *cache.LRUCache, logger func(v ...interface{})) *Proxy {
 	return &Proxy{
 		client: &http.Client{
 			Transport: &roundtripper.LoggedTransport{
 				Transport: &roundtripper.CacheTransport{
 					Transport: http.DefaultTransport,
-					Cache:     cache.NewLRUCache(capacity),
+					Cache:    cache,
 				},
 				Logger: logger,
 			}},

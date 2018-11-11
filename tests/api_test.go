@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/donutloop/httpcache/internal/cache"
 	"github.com/donutloop/httpcache/internal/handler"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
@@ -17,10 +18,11 @@ import (
 )
 
 var client *http.Client
+var c *cache.LRUCache
 
 func TestMain(m *testing.M) {
-
-	proxy := handler.NewProxy(100, log.Println)
+	c = cache.NewLRUCache(100)
+	proxy := handler.NewProxy(c, log.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 	proxyServer := httptest.NewServer(proxy)
@@ -62,8 +64,8 @@ func TestProxyHandler(t *testing.T) {
 		w.Write([]byte(`{"count": 10}`))
 		return
 	}
-	server := httptest.NewServer(http.HandlerFunc(handler))
 
+	server := httptest.NewServer(http.HandlerFunc(handler))
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -77,13 +79,19 @@ func TestProxyHandler(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status code is bad (%v)", resp.StatusCode)
 	}
+
+	if c.Length() != 1 {
+		t.Fatalf("cache length is bad, got=%d", c.Length())
+	}
 }
 
 func TestProxyHttpServer(t *testing.T) {
+
+	c := cache.NewLRUCache(100)
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
 
-		proxy := handler.NewProxy(100, logger.Println)
+		proxy := handler.NewProxy(c, logger.Println)
 		mux := http.NewServeMux()
 		mux.Handle("/", proxy)
 
@@ -117,7 +125,7 @@ func TestProxyHttpServer(t *testing.T) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	client = &http.Client{
+	client := &http.Client{
 		Transport: transport,
 	}
 
@@ -151,6 +159,10 @@ func TestProxyHttpServer(t *testing.T) {
 
 	if v.Count != 10 {
 		t.Fatalf("count is bad, got=%d", v.Count)
+	}
+
+	if c.Length() != 1 {
+		t.Fatalf("cache length is bad, got=%d", c.Length())
 	}
 }
 
