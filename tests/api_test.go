@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/donutloop/httpcache/internal/handler"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
 	"math/rand"
@@ -18,7 +20,7 @@ var client *http.Client
 
 func TestMain(m *testing.M) {
 
-	proxy := xhttp.NewProxy(100, log.Println)
+	proxy := handler.NewProxy(100, log.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 	proxyServer := httptest.NewServer(proxy)
@@ -54,7 +56,7 @@ func SetProxyURL(proxy string) func(req *http.Request) (*url.URL, error) {
 	}
 }
 
-func TestProxy(t *testing.T) {
+func TestProxyHandler(t *testing.T) {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"count": 10}`))
@@ -74,6 +76,81 @@ func TestProxy(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+}
+
+func TestProxyHttpServer(t *testing.T) {
+	go func() {
+		logger := log.New(os.Stderr, "", log.LstdFlags)
+
+		proxy := handler.NewProxy(100, logger.Println)
+		mux := http.NewServeMux()
+		mux.Handle("/", proxy)
+
+		listener, err := net.Listen("tcp", "localhost:4567")
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		xserver := xhttp.Server{
+			Server: &http.Server{Addr: "localhost:4567", Handler: proxy},
+			Logger: logger,
+			Listener: listener,
+		}
+		if err := xserver.Start(); err != nil {
+			xserver.Stop()
+		}
+	}()
+
+	<-time.After(1 *time.Second)
+
+	transport := &http.Transport{
+		Proxy: SetProxyURL("http://localhost:4567"),
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client = &http.Client{
+		Transport: transport,
+	}
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 10}`))
+		return
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+
+	v := struct {
+		Count int
+	}{}
+	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+
+	if v.Count != 10 {
+		t.Fatalf("count is bad, got=%d", v.Count)
 	}
 }
 
