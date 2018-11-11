@@ -1,11 +1,12 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
+	"github.com/donutloop/httpcache/internal/handler"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"text/tabwriter"
@@ -26,32 +27,49 @@ func main() {
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
 
-	proxy := xhttp.NewProxy(*cap, log.Println)
+	logger := log.New(os.Stderr, "", log.LstdFlags)
+
+	proxy := handler.NewProxy(*cap, logger.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 
 	if *httpAddr != "" {
-		server := &http.Server{Addr: *httpAddr, Handler: proxy}
-		log.Printf("serving HTTP on %s", *httpAddr)
-		if err := server.ListenAndServe(); err != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			server.Shutdown(ctx)
+		listener, err := net.Listen("tcp", *httpAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		xserver := xhttp.Server{
+			Server: &http.Server{Addr: *httpAddr, Handler: proxy},
+			Logger: logger,
+			Listener: listener,
+			ShutdownTimeout: 3 * time.Second,
+		}
+		if err := xserver.Start(); err != nil {
+			xserver.Stop()
 		}
 	} else {
-		log.Printf("not serving HTTP")
+		logger.Printf("not serving HTTP")
 	}
 
 	if *tlsAddr != "" {
-		server := &http.Server{Addr: *tlsAddr, Handler: xhttp.Hsts(proxy)}
-		log.Printf("serving TLS on %s", *tlsAddr)
-		if err := server.ListenAndServeTLS(*cert, *key); err != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			server.Shutdown(ctx)
+
+		listener, err := net.Listen("tcp", *tlsAddr)
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		xserver := xhttp.Server{
+			Server: &http.Server{Addr: *tlsAddr, Handler: proxy},
+			Logger: logger,
+			Listener: listener,
+			ShutdownTimeout: 3 * time.Second,
+		}
+		if err := xserver.StartTLS(*cert, *key); err != nil {
+			xserver.Stop()
 		}
 	} else {
-		log.Printf("not serving TLS")
+		logger.Printf("not serving TLS")
 	}
 }
 
