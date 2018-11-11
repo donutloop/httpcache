@@ -32,8 +32,6 @@ func (s *Server) StartTLS(certFile, keyFile string) error {
 	return s.ServeTLS(s.Listener, certFile, keyFile)
 }
 
-//  srv.ServeTLS(tcpKeepAliveListener{ln.(*net.TCPListener)}, certFile, keyFile)
-
 // Stop tries to shut the server down gracefully first, then forcefully closes it.
 func (s *Server) Stop() {
 	ctx := context.Background()

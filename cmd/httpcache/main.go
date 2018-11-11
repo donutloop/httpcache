@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/donutloop/httpcache/internal/cache"
 	"github.com/donutloop/httpcache/internal/handler"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
@@ -29,7 +30,8 @@ func main() {
 
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
-	proxy := handler.NewProxy(*cap, logger.Println)
+	c := cache.NewLRUCache(*cap)
+	proxy := handler.NewProxy(c, logger.Println)
 	mux := http.NewServeMux()
 	mux.Handle("/", proxy)
 
