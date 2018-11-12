@@ -45,7 +45,7 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *httpAddr, Handler: proxy},
+			Server: &http.Server{Addr: *httpAddr, Handler: mux},
 			Logger: logger,
 			Listener: listener,
 			ShutdownTimeout: 3 * time.Second,
@@ -65,7 +65,7 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *tlsAddr, Handler: proxy},
+			Server: &http.Server{Addr: *tlsAddr, Handler: mux},
 			Logger: logger,
 			Listener: listener,
 			ShutdownTimeout: 3 * time.Second,
