@@ -32,7 +32,10 @@ func main() {
 
 	c := cache.NewLRUCache(*cap)
 	proxy := handler.NewProxy(c, logger.Println)
+	stats := handler.NewStats(c, logger.Println)
+
 	mux := http.NewServeMux()
+	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
 
 	if *httpAddr != "" {

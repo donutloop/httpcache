@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"testing"
@@ -23,9 +24,13 @@ var c *cache.LRUCache
 func TestMain(m *testing.M) {
 	c = cache.NewLRUCache(100)
 	proxy := handler.NewProxy(c, log.Println)
+	stats := handler.NewStats(c, log.Println)
+
 	mux := http.NewServeMux()
+	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
-	proxyServer := httptest.NewServer(proxy)
+
+	proxyServer := httptest.NewServer(mux)
 
 	transport := &http.Transport{
 		Proxy: SetProxyURL(proxyServer.URL),
@@ -83,6 +88,65 @@ func TestProxyHandler(t *testing.T) {
 	if c.Length() != 1 {
 		t.Fatalf("cache length is bad, got=%d", c.Length())
 	}
+}
+
+func TestStatsHandler(t *testing.T) {
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 10}`))
+		return
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(testHandler))
+
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(req.URL)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+
+	if c.Length() != 1 {
+		t.Fatalf("cache length is bad, got=%d", c.Length())
+	}
+
+	req, err = http.NewRequest(http.MethodGet, server.URL + "/stats", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(req.URL)
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+
+	statsResponse := &handler.StatsResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(statsResponse); err != nil {
+		b , err := httputil.DumpResponse(resp, true)
+		if err == nil {
+			t.Log(string(b))
+		}
+		t.Fatalf("could not decode incoming response (%v)", err)
+	}
+
+	if statsResponse.Length != 1 {
+		t.Fatalf("cache length is bad, got=%d", c.Length())
+	}
+
+	t.Log(fmt.Sprintf("%#v", statsResponse))
 }
 
 func TestProxyHttpServer(t *testing.T) {
