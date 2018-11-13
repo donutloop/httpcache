@@ -1,5 +1,8 @@
 # httpcache
 
+[![Build Status](https://travis-ci.org/donutloop/httpcache.svg?branch=master)](https://travis-ci.org/donutloop/httpcache)
+[![Coverage Status](https://coveralls.io/repos/github/donutloop/httpcache/badge.svg)](https://coveralls.io/github/donutloop/httpcache)
+
 An HTTP server that proxies all requests to other HTTP servers and this servers caches all incoming responses objects 
 
 # Installation 
