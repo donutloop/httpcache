@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
 	"github.com/donutloop/httpcache/internal/handler"
+	"github.com/donutloop/httpcache/internal/middleware"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
 	"math/rand"
@@ -30,7 +31,9 @@ func TestMain(m *testing.M) {
 	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
 
-	proxyServer := httptest.NewServer(mux)
+	stack := middleware.NewPanic(mux, log.Println)
+	
+	proxyServer := httptest.NewServer(stack)
 
 	transport := &http.Transport{
 		Proxy: SetProxyURL(proxyServer.URL),
