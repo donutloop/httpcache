@@ -25,6 +25,13 @@ type LRUCache struct {
 
 	// How much we are limiting the cache to.
 	capacity int64
+
+	expiry time.Duration
+
+	// Stop garbage collection routine, stops any running GC routine.
+	stopGC chan struct{}
+
+	OnEviction func(key string)
 }
 
 type CachedResponse struct {
@@ -49,12 +56,25 @@ type entry struct {
 }
 
 // NewLRUCache creates a new empty cache with the given capacity.
-func NewLRUCache(capacity int64) *LRUCache {
-	return &LRUCache{
+func NewLRUCache(capacity int64, expiry time.Duration) *LRUCache {
+	cache :=  &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		capacity: capacity,
+		expiry:            expiry,
 	}
+
+
+	// We have expiry start the janitor routine.
+	if expiry > 0 {
+		// Initialize a new stop GC channel.
+		cache.stopGC = make(chan struct{})
+
+		// Start garbage collection routine to expire objects.
+		cache.StartGC()
+	}
+
+	return cache
 }
 
 // Get returns a value from the cache, and marks the entry as most
@@ -175,4 +195,55 @@ func (lru *LRUCache) checkCapacity() {
 		delete(lru.table, delValue.key)
 		lru.size -= delValue.size
 	}
+}
+
+// gc garbage collect all the expired entries from the cache.
+func (lru *LRUCache) gc() {
+	var evictedEntries []string
+	lru.mu.Lock()
+	for k, elem := range lru.table {
+		if lru.expiry > 0 && time.Now().UTC().Sub(elem.Value.(*entry).timeAccessed) > lru.expiry {
+			evictedEntries = append(evictedEntries, k)
+		}
+	}
+	lru.mu.Unlock()
+	for _, k := range evictedEntries {
+		if lru.OnEviction != nil {
+			lru.OnEviction(k)
+		}
+	}
+}
+
+// rest deletes all the entries from the cache.
+func (lru *LRUCache) Reset() {
+	for k := range lru.table {
+		lru.Delete(k)
+	}
+}
+
+// StopGC sends a message to the expiry routine to stop
+// expiring cached entries. NOTE: once this is called, cached
+// entries will not be expired, be careful if you are using this.
+func (c *LRUCache) StopGC() {
+	if c.stopGC != nil {
+		c.stopGC <- struct{}{}
+	}
+}
+
+// StartGC starts running a routine ticking at expiry interval,
+// on each interval this routine does a sweep across the cache
+// entries and garbage collects all the expired entries.
+func (c *LRUCache) StartGC() {
+	go func() {
+		for {
+			select {
+			// Wait till cleanup interval and initiate delete expired entries.
+			case <-time.After(c.expiry / 4):
+				c.gc()
+				// Stop the routine, usually called by the user of object cache during cleanup.
+			case <-c.stopGC:
+				return
+			}
+		}
+	}()
 }
