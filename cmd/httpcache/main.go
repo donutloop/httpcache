@@ -24,13 +24,22 @@ func main() {
 		cert     = fs.String("cert", "server.crt", "TLS certificate")
 		key      = fs.String("key", "server.key", "TLS key")
 		cap      = fs.Int64("cap", 100, "capacity of cache")
+		expire      = fs.Int64("expire", 5, "the items in the cache expire after or expire never")
 	)
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
 
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
-	c := cache.NewLRUCache(*cap)
+	e := time.Duration(*expire) * (time.Hour * 24)
+	c := cache.NewLRUCache(*cap, e)
+	{
+		c.OnEviction = func(key string) {
+			logger.Println(fmt.Sprintf("cache item is older then %v dayes (key: %s)", e, key))
+			c.Delete(key)
+		}
+	}
+
 	proxy := handler.NewProxy(c, logger.Println)
 	stats := handler.NewStats(c, logger.Println)
 

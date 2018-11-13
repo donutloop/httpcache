@@ -22,7 +22,7 @@ var client *http.Client
 var c *cache.LRUCache
 
 func TestMain(m *testing.M) {
-	c = cache.NewLRUCache(100)
+	c = cache.NewLRUCache(100, 0)
 	proxy := handler.NewProxy(c, log.Println)
 	stats := handler.NewStats(c, log.Println)
 
@@ -64,6 +64,8 @@ func SetProxyURL(proxy string) func(req *http.Request) (*url.URL, error) {
 }
 
 func TestProxyHandler(t *testing.T) {
+	defer c.Reset()
+
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"count": 10}`))
@@ -91,6 +93,8 @@ func TestProxyHandler(t *testing.T) {
 }
 
 func TestStatsHandler(t *testing.T) {
+	defer c.Reset()
+
 	testHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"count": 10}`))
@@ -149,13 +153,93 @@ func TestStatsHandler(t *testing.T) {
 	t.Log(fmt.Sprintf("%#v", statsResponse))
 }
 
-func TestProxyHttpServer(t *testing.T) {
+func TestProxyHandler_GC(t *testing.T) {
+	c1 := cache.NewLRUCache(100, 1 * time.Second )
+	{
+		c1.OnEviction = func(key string) {
+			c1.Delete(key)
+		}
+	}
 
-	c := cache.NewLRUCache(100)
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
 
-		proxy := handler.NewProxy(c, logger.Println)
+		proxy := handler.NewProxy(c1, logger.Println)
+		mux := http.NewServeMux()
+		mux.Handle("/", proxy)
+
+		listener, err := net.Listen("tcp", "localhost:4568")
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		xserver := xhttp.Server{
+			Server: &http.Server{Addr: "localhost:4568", Handler: proxy},
+			Logger: logger,
+			Listener: listener,
+		}
+		if err := xserver.Start(); err != nil {
+			xserver.Stop()
+		}
+	}()
+
+	<-time.After(1 *time.Second)
+
+	transport := &http.Transport{
+		Proxy: SetProxyURL("http://localhost:4568"),
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 10}`))
+		return
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(testHandler))
+
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(req.URL)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+
+	<-time.After(2 *time.Second)
+
+	if c1.Length() != 0 {
+		t.Fatalf("cache length is bad, got=%d", c1.Length())
+	}
+}
+
+func TestProxyHttpServer(t *testing.T) {
+
+	c1 := cache.NewLRUCache(100, 0 )
+	go func() {
+		logger := log.New(os.Stderr, "", log.LstdFlags)
+
+		proxy := handler.NewProxy(c1, logger.Println)
 		mux := http.NewServeMux()
 		mux.Handle("/", proxy)
 
@@ -225,12 +309,14 @@ func TestProxyHttpServer(t *testing.T) {
 		t.Fatalf("count is bad, got=%d", v.Count)
 	}
 
-	if c.Length() != 1 {
-		t.Fatalf("cache length is bad, got=%d", c.Length())
+	if c1.Length() != 1 {
+		t.Fatalf("cache length is bad, got=%d", c1.Length())
 	}
 }
 
 func BenchmarkProxy(b *testing.B) {
+	defer c.Reset()
+
 	servers := make([]*httptest.Server, 0)
 	for i := 0; i < 10; i++ {
 		handler := func(w http.ResponseWriter, r *http.Request) {
