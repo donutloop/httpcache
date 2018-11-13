@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
 	"github.com/donutloop/httpcache/internal/handler"
+	"github.com/donutloop/httpcache/internal/middleware"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
 	"net"
@@ -47,6 +48,8 @@ func main() {
 	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
 
+	stack := middleware.NewPanic(mux, logger.Println)
+
 	if *httpAddr != "" {
 		listener, err := net.Listen("tcp", *httpAddr)
 		if err != nil {
@@ -54,7 +57,7 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *httpAddr, Handler: mux},
+			Server: &http.Server{Addr: *httpAddr, Handler: stack},
 			Logger: logger,
 			Listener: listener,
 			ShutdownTimeout: 3 * time.Second,
@@ -74,7 +77,7 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *tlsAddr, Handler: mux},
+			Server: &http.Server{Addr: *tlsAddr, Handler: stack},
 			Logger: logger,
 			Listener: listener,
 			ShutdownTimeout: 3 * time.Second,
