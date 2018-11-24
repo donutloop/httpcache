@@ -5,13 +5,27 @@
 
 An HTTP server that proxies all requests to other HTTP servers and this servers caches all incoming responses objects 
 
-# Installation 
+## Backend Requirements
+
+* [golang](https://golang.org/) - The Go Programming Language
+
+## Prepare GO development environment
+
+Follow [install guide](https://golang.org/doc/install) to install golang.
+
+## Build
 
 ```bash
-go get github.com/donutloop/httpcache
+mkdir -p $GOPATH/src/github.com/donutloop/ && cd $GOPATH/src/github.com/donutloop/
+
+git clone git@github.com:donutloop/httpcache.git
+
+cd httpcache
+
+go build ./cmd/httpcache
 ```
 
-# Usage 
+## Usage 
 
 ```bash 
 USAGE
@@ -20,7 +34,9 @@ USAGE
 FLAGS
   -cap 100          capacity of cache
   -cert server.crt  TLS certificate
+  -expire 5         the items in the cache expire after or expire never
   -http :80         serve HTTP on this address (optional)
   -key server.key   TLS key
+  -rbcl 524288000   response size limit
   -tls              serve TLS on this address (optional)
 ```
