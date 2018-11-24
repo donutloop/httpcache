@@ -6,6 +6,7 @@ import (
 	"github.com/donutloop/httpcache/internal/cache"
 	"github.com/donutloop/httpcache/internal/handler"
 	"github.com/donutloop/httpcache/internal/middleware"
+	"github.com/donutloop/httpcache/internal/size"
 	"github.com/donutloop/httpcache/internal/xhttp"
 	"log"
 	"net"
@@ -20,12 +21,13 @@ func main() {
 
 	fs := flag.NewFlagSet("http-proxy", flag.ExitOnError)
 	var (
-		httpAddr = fs.String("http", ":80", "serve HTTP on this address (optional)")
-		tlsAddr  = fs.String("tls", "", "serve TLS on this address (optional)")
-		cert     = fs.String("cert", "server.crt", "TLS certificate")
-		key      = fs.String("key", "server.key", "TLS key")
-		cap      = fs.Int64("cap", 100, "capacity of cache")
-		expire      = fs.Int64("expire", 5, "the items in the cache expire after or expire never")
+		httpAddr                       = fs.String("http", ":80", "serve HTTP on this address (optional)")
+		tlsAddr                        = fs.String("tls", "", "serve TLS on this address (optional)")
+		cert                           = fs.String("cert", "server.crt", "TLS certificate")
+		key                            = fs.String("key", "server.key", "TLS key")
+		cap                            = fs.Int64("cap", 100, "capacity of cache")
+		responseBodyContentLenghtLimit = fs.Int64("rbcl", 500*size.MB, "response size limit")
+		expire                         = fs.Int64("expire", 5, "the items in the cache expire after or expire never")
 	)
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
@@ -41,7 +43,7 @@ func main() {
 		}
 	}
 
-	proxy := handler.NewProxy(c, logger.Println)
+	proxy := handler.NewProxy(c, logger.Println, *responseBodyContentLenghtLimit)
 	stats := handler.NewStats(c, logger.Println)
 
 	mux := http.NewServeMux()
@@ -57,9 +59,9 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *httpAddr, Handler: stack},
-			Logger: logger,
-			Listener: listener,
+			Server:          &http.Server{Addr: *httpAddr, Handler: stack},
+			Logger:          logger,
+			Listener:        listener,
 			ShutdownTimeout: 3 * time.Second,
 		}
 		if err := xserver.Start(); err != nil {
@@ -77,9 +79,9 @@ func main() {
 		}
 
 		xserver := xhttp.Server{
-			Server: &http.Server{Addr: *tlsAddr, Handler: stack},
-			Logger: logger,
-			Listener: listener,
+			Server:          &http.Server{Addr: *tlsAddr, Handler: stack},
+			Logger:          logger,
+			Listener:        listener,
 			ShutdownTimeout: 3 * time.Second,
 		}
 		if err := xserver.StartTLS(*cert, *key); err != nil {
