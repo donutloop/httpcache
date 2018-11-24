@@ -7,15 +7,15 @@ import (
 )
 
 func NewPanic(next http.Handler, loggerFunc func(v ...interface{})) *Panic {
-	return  &Panic{
-		Next: next,
+	return &Panic{
+		Next:       next,
 		loggerFunc: loggerFunc,
 	}
 }
 
 // Panic recovers from API panics and logs encountered panics
 type Panic struct {
-	Next http.Handler
+	Next       http.Handler
 	loggerFunc func(v ...interface{})
 }
 

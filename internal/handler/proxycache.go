@@ -7,15 +7,19 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 )
 
-func NewProxy(cache *cache.LRUCache, logger func(v ...interface{})) *Proxy {
+func NewProxy(cache *cache.LRUCache, logger func(v ...interface{}), contentLength int64) *Proxy {
 	return &Proxy{
 		client: &http.Client{
 			Transport: &roundtripper.LoggedTransport{
 				Transport: &roundtripper.CacheTransport{
-					Transport: http.DefaultTransport,
-					Cache:    cache,
+					Transport: &roundtripper.ResponseBodyLimitRoundTripper{
+						Transport: http.DefaultTransport,
+						Limit:     contentLength,
+					},
+					Cache: cache,
 				},
 				Logger: logger,
 			}},
@@ -33,7 +37,10 @@ func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	req.RequestURI = ""
 	proxyResponse, err := p.client.Do(req)
 	if err != nil {
-		p.logger(err.Error())
+		if strings.Contains(err.Error(), roundtripper.ResponseIsToLarge.Error()) {
+			resp.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}

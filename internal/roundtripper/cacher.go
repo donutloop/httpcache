@@ -3,8 +3,6 @@ package roundtripper
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
 	"net/http"
 	"net/http/httputil"
@@ -24,7 +22,7 @@ func (t *CacheTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !ok {
 		proxyResponse, err := t.Transport.RoundTrip(req)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("proxy couldn't forward request to destination server (%v)", err))
+			return nil, err
 		}
 		cachedResponse = &cache.CachedResponse{Resp: proxyResponse}
 		t.Cache.Set(clonedRequest, cachedResponse)

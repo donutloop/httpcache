@@ -15,7 +15,7 @@ type Server struct {
 
 	ShutdownTimeout time.Duration
 
-	Logger       *log.Logger
+	Logger *log.Logger
 }
 
 // Start starts the server and waits for it to return.
@@ -50,4 +50,3 @@ func (s *Server) Stop() {
 
 	s.Server.Close()
 }
-

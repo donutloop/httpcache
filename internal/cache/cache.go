@@ -57,13 +57,12 @@ type entry struct {
 
 // NewLRUCache creates a new empty cache with the given capacity.
 func NewLRUCache(capacity int64, expiry time.Duration) *LRUCache {
-	cache :=  &LRUCache{
+	cache := &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		capacity: capacity,
-		expiry:            expiry,
+		expiry:   expiry,
 	}
-
 
 	// We have expiry start the janitor routine.
 	if expiry > 0 {
