@@ -31,8 +31,17 @@ func main() {
 	)
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
-
+	
 	logger := log.New(os.Stderr, "", log.LstdFlags)
+
+	logger.Print(
+		"\n",
+		fmt.Sprintf("http addr: %v \n", *httpAddr),
+		fmt.Sprintf("tls addr: %v \n", *tlsAddr),
+		fmt.Sprintf("cap: %v \n", *cap),
+		fmt.Sprintf("responseBodyContentLenghtLimit: %v \n", *responseBodyContentLenghtLimit),
+		fmt.Sprintf("expire: %v \n", *expire),
+	)
 
 	e := time.Duration(*expire) * (time.Hour * 24)
 	c := cache.NewLRUCache(*cap, e)
