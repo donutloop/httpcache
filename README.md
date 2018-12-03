@@ -8,12 +8,13 @@ An HTTP server that proxies all requests to other HTTP servers and this servers 
 ## Backend Requirements
 
 * [golang](https://golang.org/) - The Go Programming Language
+* [docker](https://www.docker.com/) - Build, Manage and Secure Your Apps Anywhere. Your Way.
 
 ## Prepare GO development environment
 
 Follow [install guide](https://golang.org/doc/install) to install golang.
 
-## Build
+## Build without docker
 
 ```bash
 mkdir -p $GOPATH/src/github.com/donutloop/ && cd $GOPATH/src/github.com/donutloop/
@@ -23,6 +24,16 @@ git clone git@github.com:donutloop/httpcache.git
 cd httpcache
 
 go build ./cmd/httpcache
+```
+
+## Build with docker
+
+```bash
+mkdir -p $GOPATH/src/github.com/donutloop/ && cd $GOPATH/src/github.com/donutloop/
+
+git clone git@github.com:donutloop/httpcache.git
+
+docker build .
 ```
 
 ## Usage 

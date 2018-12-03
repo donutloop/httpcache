@@ -31,7 +31,7 @@ func main() {
 	)
 	fs.Usage = usageFor(fs, "httpcache [flags]")
 	fs.Parse(os.Args[1:])
-	
+
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
 	logger.Print(
