@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/donutloop/httpcache/internal/cache"
@@ -21,20 +22,30 @@ import (
 )
 
 var client *http.Client
+var clientTls *http.Client
 var c *cache.LRUCache
 
 func TestMain(m *testing.M) {
 	c = cache.NewLRUCache(100, 0)
-	proxy := handler.NewProxy(c, log.Println, 500*size.MB)
 	stats := handler.NewStats(c, log.Println)
+	ping := handler.NewPing(log.Println)
+	proxy := handler.NewProxy(
+		c,
+		log.Println,
+		500*size.MB,
+		ping,
+		stats,
+	)
 
 	mux := http.NewServeMux()
 	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
+	mux.Handle("/ping", ping)
 
 	stack := middleware.NewPanic(mux, log.Println)
 
 	proxyServer := httptest.NewServer(stack)
+	proxyServerTLS := httptest.NewTLSServer(proxy)
 
 	transport := &http.Transport{
 		Proxy: SetProxyURL(proxyServer.URL),
@@ -53,6 +64,61 @@ func TestMain(m *testing.M) {
 		Transport: transport,
 	}
 
+	transportTls := &http.Transport{
+		Proxy:           SetProxyURL(proxyServerTLS.URL + "/"),
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	log.Println("tls proxy " + proxyServerTLS.URL)
+
+	clientTls = &http.Client{
+		Transport: transportTls,
+	}
+
+	testtransport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	testclient := http.Client{
+		Transport: testtransport,
+	}
+
+	resp, err := testclient.Get(fmt.Sprintf("%v/ping", proxyServerTLS.URL))
+	if err != nil {
+		log.Fatalln(fmt.Sprintf("tls proxy (%v)", err))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalln(fmt.Sprintf("status code is bad (%v)", resp.StatusCode))
+	}
+
+	resp, err = testclient.Get(fmt.Sprintf("%v/ping", proxyServer.URL))
+	if err != nil {
+		log.Fatalln(fmt.Sprintf("proxy (%v)", err))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalln(fmt.Sprintf("status code is bad (%v)", resp.StatusCode))
+	}
+
 	// call flag.Parse() here if TestMain uses flags
 	os.Exit(m.Run())
 }
@@ -64,6 +130,36 @@ func SetProxyURL(proxy string) func(req *http.Request) (*url.URL, error) {
 			return nil, fmt.Errorf("invalid proxy address %q: %v", proxy, err)
 		}
 		return proxyURL, nil
+	}
+}
+
+func TestProxyHTTPSHandler(t *testing.T) {
+	defer c.Reset()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"count": 10}`))
+		return
+	}
+
+	testHandler := httptest.NewTLSServer(http.HandlerFunc(handler))
+
+	req, err := http.NewRequest(http.MethodGet, testHandler.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := clientTls.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status code is bad (%v)", resp.StatusCode)
+	}
+
+	if c.Length() != 0 {
+		t.Fatalf("cache length is bad, got=%d", c.Length())
 	}
 }
 
@@ -170,7 +266,16 @@ func TestProxyHandler_ResponseBodyContentLengthLimit(t *testing.T) {
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
 
-		proxy := handler.NewProxy(c1, logger.Println, cl)
+		stats := handler.NewStats(c, logger.Println)
+		ping := handler.NewPing(logger.Println)
+		proxy := handler.NewProxy(
+			c,
+			logger.Println,
+			cl,
+			ping,
+			stats,
+		)
+
 		mux := http.NewServeMux()
 		mux.Handle("/", proxy)
 
@@ -249,8 +354,16 @@ func TestProxyHandler_GC(t *testing.T) {
 
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
+		stats := handler.NewStats(c, logger.Println)
+		ping := handler.NewPing(logger.Println)
+		proxy := handler.NewProxy(
+			c,
+			logger.Println,
+			3*size.MB,
+			ping,
+			stats,
+		)
 
-		proxy := handler.NewProxy(c1, logger.Println, 3*size.MB)
 		mux := http.NewServeMux()
 		mux.Handle("/", proxy)
 
@@ -324,7 +437,15 @@ func TestProxyHttpServer(t *testing.T) {
 	go func() {
 		logger := log.New(os.Stderr, "", log.LstdFlags)
 
-		proxy := handler.NewProxy(c1, logger.Println, 5*size.MB)
+		stats := handler.NewStats(c, logger.Println)
+		ping := handler.NewPing(logger.Println)
+		proxy := handler.NewProxy(
+			c1,
+			logger.Println,
+			5*size.MB,
+			ping,
+			stats,
+		)
 		mux := http.NewServeMux()
 		mux.Handle("/", proxy)
 
