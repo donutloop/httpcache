@@ -76,3 +76,9 @@ client = &http.Client{
 client.Do(req)
 ...
 ```
+
+## Run container
+It's expose port 8000 and run a spefici container by id
+```bash
+sudo docker run  -p 8000:8000 {{container_id}} 
+```

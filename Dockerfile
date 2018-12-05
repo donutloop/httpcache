@@ -21,4 +21,5 @@ COPY --from=builder /go/src/${PACKAGE}/httpcache /httpcache
 
 USER nobody:nobody
 
+EXPOSE 8000
 ENTRYPOINT ["./httpcache"]
