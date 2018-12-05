@@ -21,7 +21,7 @@ func main() {
 
 	fs := flag.NewFlagSet("http-proxy", flag.ExitOnError)
 	var (
-		httpAddr                       = fs.String("http", ":80", "serve HTTP on this address (optional)")
+		httpAddr                       = fs.String("http", ":8000", "serve HTTP on this address (optional)")
 		tlsAddr                        = fs.String("tls", "", "serve TLS on this address (optional)")
 		cert                           = fs.String("cert", "server.crt", "TLS certificate")
 		key                            = fs.String("key", "server.key", "TLS key")
