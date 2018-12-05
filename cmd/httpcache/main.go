@@ -54,10 +54,12 @@ func main() {
 
 	proxy := handler.NewProxy(c, logger.Println, *responseBodyContentLenghtLimit)
 	stats := handler.NewStats(c, logger.Println)
+	ping := handler.NewPing(logger.Println)
 
 	mux := http.NewServeMux()
 	mux.Handle("/stats", stats)
 	mux.Handle("/", proxy)
+	mux.Handle("/ping", ping)
 
 	stack := middleware.NewPanic(mux, logger.Println)
 
