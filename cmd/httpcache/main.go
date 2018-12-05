@@ -52,16 +52,17 @@ func main() {
 		}
 	}
 
-	proxy := handler.NewProxy(c, logger.Println, *responseBodyContentLenghtLimit)
 	stats := handler.NewStats(c, logger.Println)
 	ping := handler.NewPing(logger.Println)
+	proxy := handler.NewProxy(
+		c,
+		logger.Println,
+		*responseBodyContentLenghtLimit,
+		ping,
+		stats,
+	)
 
-	mux := http.NewServeMux()
-	mux.Handle("/stats", stats)
-	mux.Handle("/", proxy)
-	mux.Handle("/ping", ping)
-
-	stack := middleware.NewPanic(mux, logger.Println)
+	stack := middleware.NewPanic(proxy, logger.Println)
 
 	if *httpAddr != "" {
 		listener, err := net.Listen("tcp", *httpAddr)

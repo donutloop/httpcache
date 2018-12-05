@@ -19,4 +19,3 @@ func (s *Ping) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte("ok"))
 }
-
