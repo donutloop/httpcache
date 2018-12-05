@@ -51,3 +51,28 @@ FLAGS
   -rbcl 524288000   response size limit
   -tls              serve TLS on this address (optional)
 ```
+
+## Usage of cache from outside (GO Example)
+
+```golang
+...
+transport := &http.Transport{
+    Proxy: SetProxyURL(proxyServer.URL), // Set url of http cache 
+    DialContext: (&net.Dialer{
+        Timeout:   30 * time.Second,
+        KeepAlive: 30 * time.Second,
+        DualStack: true,
+    }).DialContext,
+    MaxIdleConns:          100,
+    IdleConnTimeout:       90 * time.Second,
+    TLSHandshakeTimeout:   10 * time.Second,
+    ExpectContinueTimeout: 1 * time.Second,
+}
+
+client = &http.Client{
+    Transport: transport,
+}
+
+client.Do(req)
+...
+```
