@@ -37,12 +37,7 @@ func TestMain(m *testing.M) {
 		stats,
 	)
 
-	mux := http.NewServeMux()
-	mux.Handle("/stats", stats)
-	mux.Handle("/", proxy)
-	mux.Handle("/ping", ping)
-
-	stack := middleware.NewPanic(mux, log.Println)
+	stack := middleware.NewPanic(proxy, log.Println)
 
 	proxyServer := httptest.NewServer(stack)
 	proxyServerTLS := httptest.NewTLSServer(proxy)

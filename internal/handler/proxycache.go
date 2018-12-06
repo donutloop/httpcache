@@ -46,7 +46,7 @@ func (p *Proxy) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	if req.URL.Path == "/stats" {
-		p.ping.ServeHTTP(resp, req)
+		p.stats.ServeHTTP(resp, req)
 		return
 	}
 
